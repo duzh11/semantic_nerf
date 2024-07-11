@@ -20,9 +20,10 @@ import json
 
 import skimage.measure as ski_measure
 import time
-from imgviz import label_colormap
 import trimesh
 
+from imgviz import label_colormap
+from SSR.utils import image_utils
 
 @torch.no_grad()
 def render_fn(trainer, rays, chunk):
@@ -43,7 +44,7 @@ def render_fn(trainer, rays, chunk):
 
 def train():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--config_file', type=str, default="/home/shuaifeng/Documents/PhD_Research/CodeRelease/SemanticSceneRepresentations/SSR/configs/SSR_room0_config_test.yaml", help='config file name.')
+    parser.add_argument('--config_file', type=str, default="./SSR/configs/SSR_ScanNet_config.yaml", help='config file name.')
 
     parser.add_argument('--mesh_dir', type=str, required=True, help='Path to scene file, e.g., ROOT_PATH/Replica/mesh/room_0/')
     parser.add_argument('--training_data_dir', type=str, required=True, help='Path to rendered data.')
@@ -53,9 +54,7 @@ def train():
     parser.add_argument('--near_t', type=float, default=2.0, help='the near bound factor to start the ray')
     parser.add_argument('--sem', action="store_true")
     parser.add_argument('--grid_dim', type=int, default=256)
-    parser.add_argument('--gpu', type=str, default="", help='GPU IDs.')
-
-
+    parser.add_argument('--gpu', type=str, default="0", help='GPU IDs.')
 
     args = parser.parse_args()
 
@@ -84,31 +83,43 @@ def train():
     mesh_recon_save_dir = os.path.join(save_dir, "mesh_reconstruction")
     os.makedirs(mesh_recon_save_dir, exist_ok=True)
 
-
-    info_mesh_file = os.path.join(mesh_dir, "habitat", "info_semantic.json")
-    with open(info_mesh_file, "r") as f:
-        annotations = json.load(f)
+    # Replica
+    # info_mesh_file = os.path.join(mesh_dir, "habitat", "info_semantic.json")
+    # with open(info_mesh_file, "r") as f:
+    #     annotations = json.load(f)
         
-    instance_id_to_semantic_label_id = np.array(annotations["id_to_label"])
-    instance_id_to_semantic_label_id[instance_id_to_semantic_label_id<=0] = 0
-    semantic_classes = np.unique(instance_id_to_semantic_label_id)
-    num_classes = len(semantic_classes) # including void class--0
-    label_colour_map = label_colormap()[semantic_classes]
-    valid_colour_map = label_colour_map[1:]
+    # instance_id_to_semantic_label_id = np.array(annotations["id_to_label"])
+    # instance_id_to_semantic_label_id[instance_id_to_semantic_label_id<=0] = 0
+    # semantic_classes = np.unique(instance_id_to_semantic_label_id)
+    # num_classes = len(semantic_classes) # including void class--0
+    # label_colour_map = label_colormap()[semantic_classes]
+    # valid_colour_map = label_colour_map[1:]  
+
+    # replica_data_loader = replica_datasets.ReplicaDatasetCache(data_dir=training_data_dir,
+    #                                                             train_ids=train_ids, test_ids=test_ids,
+    #                                                             img_h=config["experiment"]["height"],
+    #                                                             img_w=config["experiment"]["width"])
+
+    # ssr_trainer.set_params_replica()
+    # ssr_trainer.prepare_data_replica(replica_data_loader)
+
+    # ScanNet
+    colour_map_np = image_utils.nyu40_colour_code
+
+    scannet_data_loader = scannet_datasets.ScanNet_Dataset(scene_dir=config["experiment"]["dataset_dir"],
+                                                            img_h=config["experiment"]["height"],
+                                                            img_w=config["experiment"]["width"],
+                                                            sample_step=config["experiment"]["sample_step"],
+                                                            save_dir=config["experiment"]["dataset_dir"])
+    
+    ssr_trainer.set_params_scannet(scannet_data_loader)
+    ssr_trainer.prepare_data_scannet(scannet_data_loader)
 
     total_num = 900
     step = 5
     ids = list(range(total_num))
     train_ids = list(range(0, total_num, step))
-    test_ids = [x+2 for x in train_ids]    
-
-    replica_data_loader = replica_datasets.ReplicaDatasetCache(data_dir=training_data_dir,
-                                                                train_ids=train_ids, test_ids=test_ids,
-                                                                img_h=config["experiment"]["height"],
-                                                                img_w=config["experiment"]["width"])
-
-    ssr_trainer.set_params_replica()
-    ssr_trainer.prepare_data_replica(replica_data_loader)
+    test_ids = [x+2 for x in train_ids]  
 
     ##########################
 
@@ -136,8 +147,11 @@ def train():
     draw_cameras = True
     grid_dim = args.grid_dim
             
-    train_Ts_np =  replica_data_loader.train_samples["T_wc"]
-    mesh_file = os.path.join(mesh_dir,"mesh.ply")
+    train_Ts_np =  scannet_data_loader.train_samples["T_wc"]
+    # mesh_file = os.path.join(mesh_dir,"mesh.ply")
+    # todo: change to the correct mesh file
+    scene_name = os.path.basename(config["experiment"]["dataset_dir"])
+    mesh_file = os.path.join(mesh_dir, f"{scene_name}_vh_clean_2.ply") 
     assert os.path.exists(mesh_file)
 
     trimesh_scene = trimesh.load(mesh_file, process=False)
@@ -164,7 +178,8 @@ def train():
         alpha = raw[..., 3] # [N]
         sem_logits = raw[..., 4:]  # [N_rays, N_samples, num_class]
         label_fine = logits_2_label(sem_logits).view(-1).cpu().numpy()
-        vis_label_colour = label_colour_map[label_fine+1]
+        # vis_label_colour = label_colour_map[label_fine+1]
+        vis_label_colour = colour_map_np[label_fine+1]
 
     print("Finish Computing Semantics!")
     print()
@@ -202,7 +217,7 @@ def train():
     # mesh.show()
     exported = trimesh.exchange.export.export_mesh(mesh_canonical, os.path.join(mesh_recon_save_dir, 'mesh_canonical.ply'))
     print("Saving Marching Cubes mesh to mesh_canonical.ply !")
-    exported = trimesh.exchange.export.export_mesh(mesh_canonical, os.path.join(mesh_recon_save_dir, 'mesh.ply'))
+    exported = trimesh.exchange.export.export_mesh(mesh, os.path.join(mesh_recon_save_dir, 'mesh.ply'))
     print("Saving Marching Cubes mesh to mesh.ply !")
 
 
@@ -212,6 +227,7 @@ def train():
     print('Removing noise ...')
     print(f'Original Mesh has {len(o3d_mesh_canonical.vertices)/1e6:.2f} M vertices and {len(o3d_mesh_canonical.triangles)/1e6:.2f} M faces.')
     o3d_mesh_canonical_clean = open3d_utils.clean_mesh(o3d_mesh_canonical, keep_single_cluster=False, min_num_cluster=400)
+    exprted = o3d.io.write_triangle_mesh(os.path.join(mesh_recon_save_dir, 'mesh_canonical_clean.ply'), o3d_mesh_canonical_clean)
 
     vertices_ = np.array(o3d_mesh_canonical_clean.vertices).reshape([-1, 3]).astype(np.float32)
     triangles = np.asarray(o3d_mesh_canonical_clean.triangles) # (n, 3) int
@@ -244,24 +260,44 @@ def train():
         # chunk=80*1024
         results = render_fn(ssr_trainer, rays, chunk)
 
+        # surface label
+        results_surface = torch.cat([run_MLP_fn(torch.FloatTensor(vertices_)[i: i+chunk]).cpu() for i in range(0, torch.FloatTensor(vertices_).shape[0], chunk)], dim=0)
+        sem_logits_surface = results_surface[..., 4:]  # [N_rays, N_samples, num_class]
+        labels_surface = logits_2_label(sem_logits_surface).view(-1).cpu().numpy()
+
         # combine the output and write to file
         if args.sem:
             labels = logits_2_label(results["sem_logits_fine"]).numpy()
-            vis_labels =  valid_colour_map[labels]
+            vis_labels =  colour_map_np[labels+1]
             v_colors  =  vis_labels
+
+            # surface lable 
+            vis_labels_surface =  colour_map_np[labels_surface+1]
+            v_colors_surface  =  vis_labels_surface
         else:
             rgbs = results["rgb_fine"].numpy()
             rgbs = to8b_np(rgbs)
             v_colors  =  rgbs
 
     v_colors = v_colors.astype(np.uint8)
-
+    v_colors_surface = v_colors_surface.astype(np.uint8)
 
     o3d_mesh_canonical_clean.vertex_colors = o3d.utility.Vector3dVector(v_colors/255.0)
+    o3d_mesh_canonical_clean_surface = o3d_mesh_canonical_clean.copy()
+    o3d_mesh_canonical_clean_surface.vertex_colors = o3d.utility.Vector3dVector(v_colors_surface/255.0)
+
+    # save vertices and semantic labels
+    np.savez(os.path.join(mesh_recon_save_dir, 'mesh_canonical_vertices.npz'), np.asarray(o3d_mesh_canonical_clean.vertices))
+    if args.sem:
+        np.savez(os.path.join(mesh_recon_save_dir, 'mesh_canonical_labels.npz'), (labels+1).astype(np.uint8))
+        np.savez(os.path.join(mesh_recon_save_dir, 'mesh_canonical_labels_surface.npz'), (labels_surface+1).astype(np.uint8))
 
     if args.sem:
         o3d.io.write_triangle_mesh(os.path.join(mesh_recon_save_dir, 'semantic_mesh_canonical_dim{}neart_{}.ply'.format(grid_dim, near_t)), o3d_mesh_canonical_clean)
         print("Saving Marching Cubes mesh to semantic_mesh_canonical_dim{}neart_{}.ply".format(grid_dim, near_t))
+
+        o3d.io.write_triangle_mesh(os.path.join(mesh_recon_save_dir, 'semantic_mesh_canonical_dim{}neart_{}_surface.ply'.format(grid_dim, near_t)), o3d_mesh_canonical_clean_surface)
+        print("Saving Marching Cubes mesh to semantic_mesh_canonical_dim{}neart_{}_surface.ply".format(grid_dim, near_t))
     else:
         o3d.io.write_triangle_mesh(os.path.join(mesh_recon_save_dir, 'colour_mesh_canonical_dim{}neart_{}.ply'.format(grid_dim, near_t)), o3d_mesh_canonical_clean)
         print("Saving Marching Cubes mesh to colour_mesh_canonical_dim{}neart_{}.ply".format(grid_dim, near_t))

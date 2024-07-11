@@ -1,13 +1,13 @@
 
 experiment:
-  save_dir: "PATHtoLOGS"  # where to store ckpts and rendering
-  dataset_dir: "PATHtoScanNet_Scene_Folder" # e.g., "xxx/ScanNet/scans/scene0010_00"
+  save_dir: "../exps/scene0378_00_NeuRIS"  # where to store ckpts and rendering
+  dataset_dir: "../Data/scene0378_00_NeuRIS" # e.g., "xxx/ScanNet/scans/scene0010_00"
 
   # All parsed scannet images per scenes are arranged into a unified folder called "renders" using scannet_reader.py, 
   # where the subfolders "pose", "color", "depth" contains the corresponding data.
   # e.g., "xxx/ScanNet/scans/scene0010_00/renders/color/00001.jpg"
   
-  sample_step: 100 # this is the sampling interval of the whole ScanNet sequence to determine the overall amount of training/testing images.
+  sample_step: 2 # this is the sampling interval of the whole ScanNet sequence to determine the overall amount of training/testing images.
   convention: "opencv"
   width: 320
   height: 240
@@ -51,6 +51,6 @@ train:
 logging: # logging/saving options
     step_log_print: 1  # 'frequency of console print'
     step_log_tfb: 500
-    step_save_ckpt: 20000
+    step_save_ckpt: 5000
     step_val: 5000 # frequency of rendering on unseen data
     step_vis_train: 5000

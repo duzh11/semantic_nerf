@@ -14,8 +14,8 @@ class ScanNet_Dataset(object):
         self.img_w = img_w
 
         self.scene_dir = scene_dir # scene_dir is the root directory of each sequence, i.e., xxx/ScanNet/scans/scene0088_00"
-        # scene_dir = "/home/shuaifeng/Documents/Datasets/ScanNet/scans/scene0088_00"
         scene_name = os.path.basename(scene_dir)
+        # scene_name = os.path.basename(scene_dir)[:-7] #Todo: predicted semantic labels
         data_dir = os.path.dirname(scene_dir)
 
         instance_filt_dir =  os.path.join(scene_dir, scene_name+'_2d-instance-filt')
@@ -24,11 +24,11 @@ class ScanNet_Dataset(object):
 
         # (0 corresponds to unannotated or no depth).
         if mode=="nyu40":
-            label_mapping_nyu = load_scannet_nyu40_mapping(scene_dir)
+            label_mapping_nyu = load_scannet_nyu40_mapping(data_dir)
             colour_map_np = image_utils.nyu40_colour_code
             assert colour_map_np.shape[0] == 41
         elif mode=="nyu13":
-            label_mapping_nyu = load_scannet_nyu13_mapping(scene_dir)
+            label_mapping_nyu = load_scannet_nyu13_mapping(data_dir)
             colour_map_np = image_utils.nyu13_colour_code
             assert colour_map_np.shape[0] == 14
         else:
@@ -52,7 +52,7 @@ class ScanNet_Dataset(object):
 
         # load 2D colour frames and poses
 
-        frame_ids = os.listdir(os.path.join(scene_dir, "renders", 'color'))
+        frame_ids = os.listdir(os.path.join(scene_dir, 'color'))
         frame_ids = [int(os.path.splitext(frame)[0]) for frame in frame_ids]
         frame_ids =  sorted(frame_ids)
 
@@ -61,16 +61,16 @@ class ScanNet_Dataset(object):
             if i%25==0:
                 print('preparing %s frame %d/%d'%(scene_name, i, len(frame_ids)))
 
-            pose = np.loadtxt(os.path.join(scene_dir, "renders", 'pose', '%d.txt' % frame_id))
+            pose = np.loadtxt(os.path.join(scene_dir, 'pose', '%d.txt' % frame_id))
 
             # skip frames with no valid pose
             if not np.all(np.isfinite(pose)):
                 continue
 
             frame = {'file_name_image': 
-                        os.path.join(scene_dir, "renders", 'color', '%d.jpg'%frame_id),
+                        os.path.join(scene_dir, 'color', '%d.jpg'%frame_id),
                     'file_name_depth': 
-                        os.path.join(scene_dir, "renders", 'depth', '%d.png'%frame_id),
+                        os.path.join(scene_dir, 'depth', '%d.png'%frame_id),
                     'file_name_instance': 
                         os.path.join(instance_filt_dir, 'instance-filt', '%d.png'%frame_id),
                     'file_name_label': 
@@ -148,6 +148,7 @@ class ScanNet_Dataset(object):
             depth = cv2.imread(frames_file_list[idx]["file_name_depth"], cv2.IMREAD_UNCHANGED) / 1000.0  # uint16 mm depth, then turn depth from mm to meter
             
             semantic = cv2.imread(frames_file_list[idx]["file_name_label"], cv2.IMREAD_UNCHANGED)
+            # todo predicted semantic label
             semantic = cv2.copyMakeBorder(src=semantic, top=2, bottom=2, left=0, right=0, borderType=cv2.BORDER_CONSTANT, value=0)
 
             instance = cv2.imread(frames_file_list[idx]["file_name_instance"], cv2.IMREAD_UNCHANGED)
@@ -195,6 +196,7 @@ class ScanNet_Dataset(object):
         train_semantic_nyu = train_semantic.copy()
         test_semantic_nyu = test_semantic.copy()
 
+        # todo predicted semantic label
         for scan_id, nyu_id in label_mapping_nyu.items():
             train_semantic_nyu[train_semantic==scan_id] = nyu_id
             test_semantic_nyu[test_semantic==scan_id] = nyu_id

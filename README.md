@@ -98,6 +98,7 @@ We also provide codes for extracting 3D semantic mesh from a trained Seamntic-Ne
 
 ```
 python3 SSR/extract_colour_mesh.py --sem --mesh_dir PATH_TO_MESH --mesh_dir PATH_TO_MESH  --training_data_dir PATH_TO_TRAINING_DATA --save_dir PATH_TO_SAVE_DIR
+python -m SSR.extract_colour_mesh --mesh_dir ../Data/scene0378_00 --training_data_dir ../Data/scene0378_00 --save_dir ../exps/scene0378_00 --sem
 ```
 <img src='imgs/sem_mesh_room0.png'/>
 
