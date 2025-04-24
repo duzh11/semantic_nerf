@@ -1,6 +1,6 @@
 
 experiment:
-  save_dir: "../exps/scene0378_00_NeuRIS"  # where to store ckpts and rendering
+  save_dir: "./exps/scene0378_00_NeuRIS"  # where to store ckpts and rendering
   dataset_dir: "../Data/scene0378_00_NeuRIS" # e.g., "xxx/ScanNet/scans/scene0010_00"
 
   # All parsed scannet images per scenes are arranged into a unified folder called "renders" using scannet_reader.py, 

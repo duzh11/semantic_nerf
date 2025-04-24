@@ -4,8 +4,8 @@
 *.npy
 *.npz
 *.dae
-data/*
-logs/*
+Data/*
+exps/*
 
 .idea/
 .anaconda3/
